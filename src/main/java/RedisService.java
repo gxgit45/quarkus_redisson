@@ -5,18 +5,19 @@ import org.redisson.Redisson;
 import org.redisson.api.*;
 import org.redisson.api.search.query.QueryFilter;
 import org.redisson.api.search.query.QueryOptions;
-import org.redisson.api.search.query.ReturnAttribute;
 import org.redisson.api.search.query.SearchResult;
 import org.redisson.client.codec.StringCodec;
 import org.redisson.config.Config;
-import java.util.HashSet;
-import java.util.Set;
+
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 @ApplicationScoped
 public class RedisService implements AutoCloseable{
     private static final Logger LOG = Logger.getLogger(RedisService.class);
+
+    private final long RECORD_SEARCH_CNT = 15000L;
 
     private RedissonClient redisson = null;
     public RedisService(){
@@ -61,7 +62,7 @@ public class RedisService implements AutoCloseable{
           long startTime = System.currentTimeMillis();
 
           RBatch batch = redisson.createBatch(BatchOptions.defaults());
-          keySet.parallelStream().forEach(key ->{
+          keySet.parallelStream().limit(this.RECORD_SEARCH_CNT).forEach(key ->{
               batch.getMap(key,StringCodec.INSTANCE).readAllEntrySetAsync();
 
           });
@@ -98,18 +99,15 @@ public class RedisService implements AutoCloseable{
             AtomicInteger min = new AtomicInteger();
             AtomicInteger max = new AtomicInteger();
 
-            keySet.stream().forEach(key ->{
-                int id = Integer.parseInt(key.split(":")[2]);
-                min.set(Math.min(id, min.get()));
-                max.set(Math.max(id, max.get()));
-
-            });
-
             RSearch s = redisson.getSearch(StringCodec.INSTANCE);
             QueryFilter queryFilter = QueryFilter.numeric("id").min(min.doubleValue()).max(max.doubleValue());
+            List<SearchResult> searchResults = Collections.synchronizedList(new ArrayList<>());
 
-            SearchResult r = s.search("idx:animal", "*", QueryOptions.defaults().filters(queryFilter));
+            keySet.parallelStream().limit(this.RECORD_SEARCH_CNT).forEach(key -> {
+                int id = Integer.parseInt(key.split(":")[2]);
+                searchResults.add(s.search("idx:animal", "*", QueryOptions.defaults().filters(queryFilter).limit(id,id)));
 
+            });
 
             LOG.info(String.format("Search Took [%s] ms",(System.currentTimeMillis() - startTime)));
 
@@ -139,11 +137,6 @@ public class RedisService implements AutoCloseable{
         }
 
         LOG.info(String.format("Loaded [%s] records into the database", maxDataCount));
-
-
-        //SomeObject currentObject = map.putIfAbsent("323", new SomeObject());
-        //SomeObject obj = map.remove("123");
-
     }
 
 

@@ -10,7 +10,6 @@ public class ReddisonTestMain implements QuarkusApplication{
 
     @Override
     public int run(String... args) throws Exception {
-        //redisService.loadTestData();
         redisService.testHgetAllPerformanceSync();
         redisService.testSearchWithIndexPerformanceSync();
         return 0;
