@@ -50,12 +50,5 @@ If you want to learn more about building native executables, please consult http
 ### Docker command to run redis locally
 ```
 docker run -p 6379:6379 redislabs/redisearch:latest
-```
-
-## Redisson Commands for creating index and searching it
-```
-FT.CREATE idx:animal ON hash PREFIX 1 "animal:" SCHEMA id NUMERIC SORTABLE
-FT.INFO idx:animal
-FT.SEARCH idx:animal * FILTER id 9132 9132
-```
+```s
 

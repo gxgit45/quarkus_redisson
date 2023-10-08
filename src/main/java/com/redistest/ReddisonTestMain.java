@@ -1,3 +1,5 @@
+package com.redistest;
+
 import io.quarkus.runtime.Quarkus;
 import io.quarkus.runtime.QuarkusApplication;
 import io.quarkus.runtime.annotations.QuarkusMain;
@@ -10,11 +12,9 @@ public class ReddisonTestMain implements QuarkusApplication{
 
     @Override
     public int run(String... args) throws Exception {
-        redisService.testHgetAllPerformanceSync();
-        redisService.testSearchWithIndexPerformanceSync();
+        redisService.testHgetAllPerformance();
         return 0;
     }
-
     public static void main(String... args) {
         Quarkus.run(ReddisonTestMain.class, args);
     }
