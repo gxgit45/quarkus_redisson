@@ -47,6 +47,11 @@ You can then execute your native executable with: `./target/redisson-test-1.0.0-
 
 If you want to learn more about building native executables, please consult https://quarkus.io/guides/maven-tooling.
 
+### Docker command to run redis locally
+```
+docker run -p 6379:6379 redislabs/redisearch:latest
+```
+
 ## Redisson Commands for creating index and searching it
 ```
 FT.CREATE idx:animal ON hash PREFIX 1 "animal:" SCHEMA id NUMERIC SORTABLE
