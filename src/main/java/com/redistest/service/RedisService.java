@@ -1,8 +1,9 @@
-package com.redistest;
+package com.redistest.service;
 
 
 import com.google.gson.Gson;
 import com.redistest.model.Animal;
+import com.redistest.utils.AppUtils;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -10,16 +11,17 @@ import org.redisson.Redisson;
 import org.redisson.api.*;
 import org.redisson.client.codec.StringCodec;
 import org.redisson.config.Config;
+
+import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 
 @ApplicationScoped
 public class RedisService implements AutoCloseable{
     private static final Logger LOG = Logger.getLogger(RedisService.class);
-
-    private static final Charset CHARSET = StandardCharsets.UTF_8;
 
     private final Gson gson = new Gson();
 
@@ -49,26 +51,29 @@ public class RedisService implements AutoCloseable{
 
 
     public void testHgetAllPerformance() {
-        Map<String,String> dataMap;
-
             RMap<String, String> map = redisson.getMap(this.searchKey,StringCodec.INSTANCE);
-            List<Animal> animals = new ArrayList<>();
             if(map == null || map.isEmpty()){
                 this.loadTestData();
             }
             long startTime = System.currentTimeMillis();
             map = redisson.getMap(this.searchKey,StringCodec.INSTANCE);
-            dataMap = map.readAllMap();
-                dataMap.values().stream().filter(Objects::nonNull).forEach(item ->{
-                    String itemClass = item.getClass().getName();
-                    String result = "";
+            Map<String,String> dataMap = map.readAllMap();
+            final Map<String, Animal> animalMap = new ConcurrentHashMap<>();
+                dataMap.entrySet().parallelStream().filter(Objects::nonNull).forEach(item ->{
+                    try {
+                        animalMap.put(item.getKey()
+                                ,gson.fromJson(AppUtils.uncompressString(item.getValue()),Animal.class));
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+
                 });
             LOG.info(String.format("Time for HGETALL is [%s] ms",(System.currentTimeMillis() - startTime)));
     }
 
     public void loadTestData()  {
         LOG.info("Loading data.....");
-        int maxDataCount = 300000;
+        int maxDataCount = 200000;
         // second one for batch query
         for(int i = 0; i < maxDataCount; i++ ){
             RMap<String, Object> map = redisson.getMap(this.searchKey, StringCodec.INSTANCE);
@@ -82,7 +87,11 @@ public class RedisService implements AutoCloseable{
             animal.setFavoriteFood("Bananas");
             animal.setCategoryId(i+i);
             String jsonString = gson.toJson(animal);
-            map.put("value:" + i,jsonString.getBytes(CHARSET));
+            try{
+                map.put("value:" + i, AppUtils.compressString(jsonString));
+            }catch (Exception e){
+                LOG.error(e,e);
+            }
 
         }
 

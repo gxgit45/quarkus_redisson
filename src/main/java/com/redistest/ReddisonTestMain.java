@@ -1,5 +1,6 @@
 package com.redistest;
 
+import com.redistest.service.RedisService;
 import io.quarkus.runtime.Quarkus;
 import io.quarkus.runtime.QuarkusApplication;
 import io.quarkus.runtime.annotations.QuarkusMain;
