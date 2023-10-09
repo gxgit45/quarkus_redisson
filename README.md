@@ -50,5 +50,5 @@ If you want to learn more about building native executables, please consult http
 ### Docker command to run redis locally
 ```
 docker run -p 6379:6379 redislabs/redisearch:latest
-```s
+```
 
