@@ -2,7 +2,6 @@ package com.redistest.service;
 
 import com.google.gson.Gson;
 import com.redistest.model.Animal;
-import com.redistest.utils.AppUtils;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
@@ -10,13 +9,14 @@ import org.redisson.Redisson;
 import org.redisson.api.*;
 import org.redisson.config.Config;
 import java.util.*;
-import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 @ApplicationScoped
 public class RedisService implements AutoCloseable{
     private static final Logger LOG = Logger.getLogger(RedisService.class);
 
-    private static final String SEARCH_KEY = "animals";
+    private Set<String> listKeys;
 
     private final RedissonClient redisson;
     public RedisService(@ConfigProperty(name = "redisson.timeout") int redissonTimeout
@@ -24,6 +24,20 @@ public class RedisService implements AutoCloseable{
         Config config = new Config();
         config.useSingleServer().setAddress(redissonUrl).setTimeout(redissonTimeout);
         redisson = Redisson.create(config);
+
+        // set list keys
+        listKeys = new HashSet<>();
+        listKeys.add("Dog");
+        listKeys.add("Cow");
+        listKeys.add("Gorilla");
+        listKeys.add("Goat");
+        listKeys.add("Ox");
+        listKeys.add("Fox");
+        listKeys.add("Eagle");
+        listKeys.add("Alligator");
+        listKeys.add("Crow");
+        listKeys.add("Snake");
+
     }
 
     @Override
@@ -41,17 +55,21 @@ public class RedisService implements AutoCloseable{
 
 
     public void testPerformance() {
-        RList<String> list;
+      final List<String> syncList = new ArrayList<>();
         try{
-            long startTime = System.currentTimeMillis();
-            list = redisson.getList(SEARCH_KEY);
-            if(null == list || list.isEmpty()){
+            if(this.redisson.getList("Cow").isEmpty()){
                 this.loadTestData();
-                list = redisson.getList(SEARCH_KEY);
             }
-            Future<List<String>> stringList = list.readAllAsync();
-            List<String> data = stringList.get();
-            LOG.info(String.format("Operation Took [%s] ms",(System.currentTimeMillis() - startTime)));
+            long startTime = System.currentTimeMillis();
+            listKeys.parallelStream().forEach(key ->{
+                RList<String> list = this.redisson.getList(key);
+                if(null != list && !list.isEmpty()){
+                    syncList.addAll(list.readAll());
+                }
+            });
+
+            LOG.info(String.format("Pull [%s] Animals from cache in [%s] ms",syncList.size()
+                    ,(System.currentTimeMillis() - startTime)));
 
         }catch (Exception e){
             LOG.error(e,e);
@@ -61,30 +79,33 @@ public class RedisService implements AutoCloseable{
 
     public void loadTestData() {
         LOG.info("Loading data.....");
-        int maxDataCount = 300000;
+        int maxDataCount = 66000;
         Gson gson = new Gson();
-        RList<String> list = redisson.getList(SEARCH_KEY);
-        try{
 
-            for(int i = 0; i < maxDataCount; i++ ){
-                Animal animal = new Animal();
-                animal.setId(i);
-                animal.setHabitat("Jungle");
-                animal.setColor("Brown");
-                animal.setName("George");
-                animal.setAType("Gorilla");
-                animal.setShape("Human Shape");
-                animal.setFavoriteFood("Bananas");
-                animal.setCategoryId(i+i);
-                String jsonStr = gson.toJson(animal);
-                list.add(jsonStr);
-            }
+        try{
+            listKeys.stream().forEach(listName-> {
+                RList<String> list = redisson.getList(listName);
+                for(int i = 0; i < maxDataCount; i++ ){
+                    Animal animal = new Animal();
+                    animal.setId(i);
+                    animal.setHabitat("Random");
+                    animal.setColor("Brown");
+                    animal.setName(listName + " George");
+                    animal.setAType(listName);
+                    animal.setShape(listName + " Shape");
+                    animal.setFavoriteFood("Food");
+                    animal.setCategoryId(i+i);
+                    String jsonStr = gson.toJson(animal);
+                    list.add(jsonStr);
+                }
+
+            });
 
         }catch (Exception e){
             LOG.error(e,e);
         }
 
-        LOG.info(String.format("Loaded [%s] records into the database", maxDataCount));
+        LOG.info("Loaded records into the database");
     }
 
 }
