@@ -8,15 +8,17 @@ import org.jboss.logging.Logger;
 import org.redisson.Redisson;
 import org.redisson.api.*;
 import org.redisson.config.Config;
+import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
 
 @ApplicationScoped
 public class RedisService implements AutoCloseable{
     private static final Logger LOG = Logger.getLogger(RedisService.class);
 
     private Set<String> listKeys;
+
+    final Gson gson = new Gson();
+
 
     private final RedissonClient redisson;
     public RedisService(@ConfigProperty(name = "redisson.timeout") int redissonTimeout
@@ -55,13 +57,11 @@ public class RedisService implements AutoCloseable{
 
 
     public void testPerformance() {
-      final List<String> syncList = new ArrayList<>();
+      final List<String> syncList = Collections.synchronizedList(new ArrayList<>());
         try{
-            if(this.redisson.getList("Cow").isEmpty()){
-                this.loadTestData();
-            }
+            this.loadTestData();
             long startTime = System.currentTimeMillis();
-            listKeys.parallelStream().forEach(key ->{
+            listKeys.parallelStream().filter(Objects::nonNull).forEach(key ->{
                 RList<String> list = this.redisson.getList(key);
                 if(null != list && !list.isEmpty()){
                     syncList.addAll(list.readAll());
@@ -78,25 +78,38 @@ public class RedisService implements AutoCloseable{
     }
 
     public void loadTestData() {
-        LOG.info("Loading data.....");
         int maxDataCount = 66000;
-        Gson gson = new Gson();
 
         try{
             listKeys.stream().forEach(listName-> {
                 RList<String> list = redisson.getList(listName);
-                for(int i = 0; i < maxDataCount; i++ ){
-                    Animal animal = new Animal();
-                    animal.setId(i);
-                    animal.setHabitat("Random");
-                    animal.setColor("Brown");
-                    animal.setName(listName + " George");
-                    animal.setAType(listName);
-                    animal.setShape(listName + " Shape");
-                    animal.setFavoriteFood("Food");
-                    animal.setCategoryId(i+i);
-                    String jsonStr = gson.toJson(animal);
-                    list.add(jsonStr);
+                if(list == null || list.isEmpty() || list.size() != maxDataCount){
+
+                    if(null != list)
+                        list.clear();
+
+                    LOG.info("Loading data for Animal " + listName);
+                    List<String> animalList = new ArrayList<>();
+                    for(int i = 0; i < maxDataCount; i++ ){
+                        Animal animal = new Animal();
+                        animal.setId(i);
+                        animal.setHabitat("Random");
+                        animal.setColor("Brown");
+                        animal.setName(listName + " George");
+                        animal.setAType(listName);
+                        animal.setShape(listName + " Shape");
+                        animal.setFavoriteFood("Food");
+                        animal.setCategoryId(i+i);
+                        String jsonStr = gson.toJson(animal);
+                        animalList.add(jsonStr);
+
+                    }
+                    //list.expireIfNotSet(Duration.ofHours(1));
+                    list.addAll(animalList);
+
+
+                    LOG.info("Completed loading data for Animal " + listName);
+
                 }
 
             });
@@ -105,7 +118,6 @@ public class RedisService implements AutoCloseable{
             LOG.error(e,e);
         }
 
-        LOG.info("Loaded records into the database");
     }
 
 }
