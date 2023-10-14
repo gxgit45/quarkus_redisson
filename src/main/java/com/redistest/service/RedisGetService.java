@@ -2,13 +2,13 @@ package com.redistest.service;
 
 import com.google.gson.Gson;
 import com.redistest.model.Animal;
-import com.redistest.utils.AppUtils;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import org.redisson.Redisson;
 import org.redisson.api.*;
 import org.redisson.client.codec.StringCodec;
+import org.redisson.codec.LZ4Codec;
 import org.redisson.config.Config;
 
 import java.time.Duration;
@@ -26,7 +26,9 @@ public class RedisGetService implements AutoCloseable{
     private final RedissonClient redisson;
     public RedisGetService(@ConfigProperty(name = "redisson.timeout") int redissonTimeout
             , @ConfigProperty(name = "redisson.url") String redissonUrl){
+
         Config config = new Config();
+        config.setCodec(new LZ4Codec());
         config.useSingleServer()
                 .setAddress(redissonUrl).setTimeout(redissonTimeout).setConnectionMinimumIdleSize(24);
         redisson = Redisson.create(config);
@@ -47,7 +49,7 @@ public class RedisGetService implements AutoCloseable{
     public void testPerformance() {
         try{
             Set<String> keys = this.getKeys();
-            if(!this.redisson.getBucket("1", StringCodec.INSTANCE).isExists())
+            if(!this.redisson.getBucket("1").isExists())
                 this.loadTestData(keys);;
             List<String> dataList = Collections.synchronizedList(new ArrayList<>());
             long startTime = System.currentTimeMillis();
@@ -57,7 +59,7 @@ public class RedisGetService implements AutoCloseable{
             keys.parallelStream().forEach(key->{
                 try{
 
-                    batch.getBucket(key,StringCodec.INSTANCE).getAsync();
+                    batch.getBucket(key).getAsync();
 
                 }catch (Exception e){
                     LOG.error(e,e);
@@ -97,7 +99,7 @@ public class RedisGetService implements AutoCloseable{
         LOG.info("Loading data.....");
         keys.stream().forEach(key->{
             try{
-                RBucket<String> stringRBucket = redisson.getBucket(key, StringCodec.INSTANCE);
+                RBucket<String> stringRBucket = redisson.getBucket(key);
                 Animal animal = new Animal();
                 animal.setHabitat("Jungle");
                 animal.setColor("Brown");
